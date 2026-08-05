@@ -22,7 +22,7 @@ class PortalCapture:
         self._subscriptions: set[int] = set()
 
     def capture(self, interactive: bool, callback: CaptureCallback) -> None:
-        token = "sniplite_" + secrets.token_hex(8)
+        token = "snipr_" + secrets.token_hex(8)
         options = {
             "interactive": GLib.Variant("b", interactive),
             "handle_token": GLib.Variant("s", token),

@@ -1,3 +1,10 @@
+snipr (0.2.0-1) unstable; urgency=medium
+
+  * Rename the application from SnipLite to SnipR.
+  * Replace the former sniplite package during upgrades.
+
+ -- SnipR Contributors <noreply@example.com>  Wed, 05 Aug 2026 07:10:00 +0530
+
 sniplite (0.1.3-1) unstable; urgency=medium
 
   * Align drawing coordinates with the fitted screenshot.

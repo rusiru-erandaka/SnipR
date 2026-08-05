@@ -2,7 +2,7 @@ import unittest
 
 from PIL import Image
 
-from sniplite.ui import fit_geometry, image_texture
+from snipr.ui import fit_geometry, image_texture
 
 
 class GtkTextureTests(unittest.TestCase):

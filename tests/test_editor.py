@@ -4,8 +4,8 @@ from pathlib import Path
 
 from PIL import Image
 
-from sniplite.editor import EditorModel
-from sniplite.paths import unique_capture_path
+from snipr.editor import EditorModel
+from snipr.paths import unique_capture_path
 
 
 class EditorModelTests(unittest.TestCase):

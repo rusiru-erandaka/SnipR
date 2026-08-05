@@ -1,8 +1,8 @@
 [Desktop Entry]
-Name=SnipLite
+Name=SnipR
 Comment=Capture and annotate screenshots on Wayland
-Exec=sniplite
-Icon=io.github.sniplite.Sniplite
+Exec=snipr
+Icon=io.github.snipr.SnipR
 Terminal=false
 Type=Application
 Categories=Graphics;
