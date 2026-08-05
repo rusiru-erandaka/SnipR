@@ -1,0 +1,10 @@
+Package: sniplite
+Version: 0.1.2-1
+Section: graphics
+Priority: optional
+Architecture: all
+Maintainer: SnipLite Contributors <noreply@example.com>
+Depends: python3 (>= 3.10), python3-gi, gir1.2-gtk-4.0, python3-pil, xdg-desktop-portal, xdg-desktop-portal-gnome | xdg-desktop-portal-gtk
+Description: lightweight Wayland screenshot editor
+ SnipLite captures through the secure desktop portal, preserves the raw image,
+ and provides a compact set of screenshot annotation tools.
