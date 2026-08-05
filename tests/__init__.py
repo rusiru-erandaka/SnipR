@@ -1,0 +1,1 @@
+"""SnipLite test suite."""
