@@ -12,12 +12,17 @@ from gi.repository import Gdk, Gio, GLib, Graphene, Gtk
 from PIL import Image
 
 from . import __version__
-from .capture import PortalCapture
+from .capture import CaptureCancelled, PortalCapture
 from .editor import EditorModel
 from .paths import copy_portal_capture
 
 
 APP_ID = "io.github.snipr.SnipR"
+CAPTURE_CHOICES = (
+    ("Rectangular region", True),
+    ("Full screen", True),
+    ("Active window", True),
+)
 
 
 def fit_geometry(image_size: tuple[int, int], canvas_size: tuple[int, int]):
@@ -287,11 +292,11 @@ class CaptureWindow(Gtk.ApplicationWindow):
         title = Gtk.Label()
         title.set_markup("<span size='x-large' weight='bold'>Take a screenshot</span>")
         box.append(title)
-        help_text = Gtk.Label(label="Region and Window use Ubuntu’s secure Wayland picker.")
+        help_text = Gtk.Label(label="All modes use Ubuntu’s secure Wayland screenshot picker.")
         help_text.add_css_class("dim-label")
         box.append(help_text)
         grid = Gtk.Grid(column_spacing=10, row_spacing=10, column_homogeneous=True)
-        for index, (label, interactive) in enumerate((("Rectangular region", True), ("Full screen", False), ("Active window", True))):
+        for index, (label, interactive) in enumerate(CAPTURE_CHOICES):
             button = Gtk.Button(label=label)
             button.set_size_request(-1, 50)
             button.connect("clicked", self._capture_clicked, interactive)
@@ -322,7 +327,10 @@ class CaptureWindow(Gtk.ApplicationWindow):
     def _capture_finished(self, uri: str | None, error: Exception | None) -> None:
         if error:
             self.set_visible(True)
-            self.status.set_text(str(error))
+            if isinstance(error, CaptureCancelled):
+                self.status.set_text("Capture cancelled. Choose a mode to try again.")
+            else:
+                self.status.set_text(f"Screenshot portal error: {error}")
             return
         try:
             raw_path = copy_portal_capture(uri or "")

@@ -7,7 +7,7 @@ SnipR is a lightweight Ubuntu Wayland screenshot editor. It captures through
 `Pictures/Screenshots` directory, and opens a GTK 4 editor. Edited output is never
 silently written over the raw capture.
 
-Current application/package version: `0.2.0-1`.
+Current application/package version: `0.2.1-1`.
 
 ## Technology and runtime requirements
 
@@ -37,8 +37,8 @@ available from Ubuntu packages over new third-party libraries.
 
 ## Capture and editing flow
 
-1. `CaptureWindow` requests a full-screen or interactive portal screenshot after
-   the selected delay.
+1. `CaptureWindow` opens the interactive portal screenshot picker after the
+   selected delay for every capture-mode button.
 2. The portal returns a file URI. `copy_portal_capture()` copies it to a unique
    `Screenshot_YYYY-MM-DD_HH-MM-SS.png` path.
 3. `EditorWindow` loads that path into `EditorModel` and a GDK texture.
@@ -55,6 +55,11 @@ available from Ubuntu packages over new third-party libraries.
 - Never overwrite or delete the raw capture during editing or uninstalling.
 - Region and active-window buttons both use the interactive portal because the
   Wayland portal, not the application, owns secure window/region selection.
+- Full-screen capture must also pass `interactive=True`. Current Ubuntu portal
+  backends may cancel non-interactive screenshot requests. The system picker owns
+  the final region/window/display selection for all three buttons.
+- Keep `CAPTURE_CHOICES` routing covered by tests so no button accidentally
+  regresses to the rejected non-interactive portal path.
 - Keep pen, highlighter, eraser, and crop pointer mapping exact at every aspect
   ratio and window size.
 - Eraser restores pixels from the model's current uncensored background layer;
@@ -84,15 +89,15 @@ Build and inspect the package:
 
 ```sh
 ./build-deb.sh
-dpkg-deb --info dist/snipr_0.2.0-1_all.deb
-dpkg-deb --contents dist/snipr_0.2.0-1_all.deb
+dpkg-deb --info dist/snipr_0.2.1-1_all.deb
+dpkg-deb --contents dist/snipr_0.2.1-1_all.deb
 desktop-file-validate data/io.github.snipr.SnipR.desktop
 ```
 
 Install the local build:
 
 ```sh
-sudo apt install ./dist/snipr_0.2.0-1_all.deb
+sudo apt install ./dist/snipr_0.2.1-1_all.deb
 ```
 
 ## Release checklist

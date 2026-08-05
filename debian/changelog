@@ -1,3 +1,10 @@
+snipr (0.2.1-1) unstable; urgency=medium
+
+  * Route full-screen capture through Ubuntu's interactive Wayland picker.
+  * Improve portal cancellation and error messages.
+
+ -- SnipR Contributors <noreply@example.com>  Wed, 05 Aug 2026 09:45:00 +0530
+
 snipr (0.2.0-1) unstable; urgency=medium
 
   * Rename the application from SnipLite to SnipR.

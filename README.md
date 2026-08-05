@@ -11,7 +11,7 @@ draw, highlight, erase, crop, undo, redo, copy, and manually save the edited ima
 3. Install the included package:
 
 ```sh
-sudo apt install ./dist/snipr_0.2.0-1_all.deb
+sudo apt install ./dist/snipr_0.2.1-1_all.deb
 ```
 
 Ubuntu installs any required GTK, Pillow, and desktop-portal dependencies
@@ -57,8 +57,10 @@ edits shows Save, Discard, and Cancel choices.
 - Capture delay from 0 to 10 seconds
 
 Wayland prevents applications from reading other windows directly. Region and
-window capture therefore use Ubuntu's trusted desktop screenshot portal. The
-portal controls the exact picker displayed on each Ubuntu desktop.
+window capture therefore use Ubuntu's trusted desktop screenshot portal. All
+three buttons open this picker for reliable behavior across Ubuntu versions. For
+a full-screen capture, choose the display/full-screen option in the picker and
+confirm the capture. The portal controls the exact UI displayed on each desktop.
 
 ## Run from source
 
