@@ -17,7 +17,7 @@ from .editor import EditorModel
 from .paths import copy_portal_capture
 
 
-APP_ID = "io.github.sniplite.Sniplite"
+APP_ID = "io.github.snipr.SnipR"
 
 
 def fit_geometry(image_size: tuple[int, int], canvas_size: tuple[int, int]):
@@ -54,7 +54,7 @@ class EditorWindow(Gtk.ApplicationWindow):
     CURSORS = {"pen": "pencil", "highlighter": "cell", "eraser": "not-allowed", "crop": "crosshair"}
 
     def __init__(self, app: Gtk.Application, raw_path: Path) -> None:
-        super().__init__(application=app, title=f"SnipLite {__version__} — {raw_path.name}")
+        super().__init__(application=app, title=f"SnipR {__version__} — {raw_path.name}")
         self.set_default_size(1000, 720)
         self.raw_path = raw_path
         self.model = EditorModel(Image.open(raw_path))
@@ -236,7 +236,7 @@ class EditorWindow(Gtk.ApplicationWindow):
                 if path.suffix.lower() != ".png":
                     path = path.with_suffix(".png")
                 self.model.save(path)
-                self.set_title(f"SnipLite {__version__} — {path.name}")
+                self.set_title(f"SnipR {__version__} — {path.name}")
                 if close_after:
                     self._closing_after_choice = True
                     self.close()
@@ -273,7 +273,7 @@ class EditorWindow(Gtk.ApplicationWindow):
 
 class CaptureWindow(Gtk.ApplicationWindow):
     def __init__(self, app: Gtk.Application) -> None:
-        super().__init__(application=app, title=f"SnipLite {__version__}")
+        super().__init__(application=app, title=f"SnipR {__version__}")
         self.set_default_size(460, 280)
         self.portal = PortalCapture()
         self._build_ui()
@@ -334,7 +334,7 @@ class CaptureWindow(Gtk.ApplicationWindow):
             self.status.set_text(f"Could not save screenshot: {exc}")
 
 
-class SnipLiteApplication(Gtk.Application):
+class SnipRApplication(Gtk.Application):
     def __init__(self) -> None:
         super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.FLAGS_NONE)
 
@@ -346,4 +346,4 @@ class SnipLiteApplication(Gtk.Application):
 
 
 def main() -> int:
-    return SnipLiteApplication().run(None)
+    return SnipRApplication().run(None)
