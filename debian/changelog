@@ -1,0 +1,17 @@
+sniplite (0.1.2-1) unstable; urgency=medium
+
+  * Render screenshots with a native GTK Picture layer.
+
+ -- SnipLite Contributors <noreply@example.com>  Wed, 05 Aug 2026 06:35:00 +0530
+
+sniplite (0.1.1-1) unstable; urgency=medium
+
+  * Fix screenshot rendering in the editor on GTK Wayland sessions.
+
+ -- SnipLite Contributors <noreply@example.com>  Wed, 05 Aug 2026 06:20:00 +0530
+
+sniplite (0.1.0-1) unstable; urgency=medium
+
+  * Initial release.
+
+ -- SnipLite Contributors <noreply@example.com>  Wed, 05 Aug 2026 06:00:00 +0530

@@ -1,0 +1,9 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+override_dh_auto_install:
+	dh_auto_install
+	install -Dm644 data/io.github.sniplite.Sniplite.desktop debian/sniplite/usr/share/applications/io.github.sniplite.Sniplite.desktop
+	install -Dm644 data/io.github.sniplite.Sniplite.svg debian/sniplite/usr/share/icons/hicolor/scalable/apps/io.github.sniplite.Sniplite.svg
