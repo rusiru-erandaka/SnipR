@@ -9,6 +9,18 @@ from gi.repository import Gio, GLib
 CaptureCallback = Callable[[str | None, Exception | None], None]
 
 
+class CaptureCancelled(RuntimeError):
+    """Raised when the desktop portal reports a cancelled capture request."""
+
+
+def portal_options(interactive: bool, token: str) -> dict[str, GLib.Variant]:
+    """Build screenshot options in one testable place."""
+    return {
+        "interactive": GLib.Variant("b", interactive),
+        "handle_token": GLib.Variant("s", token),
+    }
+
+
 class PortalCapture:
     """Wayland-safe screenshot capture through xdg-desktop-portal."""
 
@@ -23,10 +35,7 @@ class PortalCapture:
 
     def capture(self, interactive: bool, callback: CaptureCallback) -> None:
         token = "snipr_" + secrets.token_hex(8)
-        options = {
-            "interactive": GLib.Variant("b", interactive),
-            "handle_token": GLib.Variant("s", token),
-        }
+        options = portal_options(interactive, token)
         parameters = GLib.Variant("(sa{sv})", ("", options))
 
         def request_ready(connection: Gio.DBusConnection, result: Gio.AsyncResult) -> None:
@@ -52,7 +61,7 @@ class PortalCapture:
                 self.connection.signal_unsubscribe(subscription_id)
                 self._subscriptions.discard(subscription_id)
                 if code != 0:
-                    callback(None, RuntimeError("Screenshot capture was cancelled"))
+                    callback(None, CaptureCancelled("Screenshot capture was cancelled"))
                     return
                 uri = results.get("uri")
                 if isinstance(uri, GLib.Variant):
