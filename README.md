@@ -36,7 +36,7 @@ The repository includes a dependency-free package builder (apart from the standa
 The resulting `.deb` is written to `dist/`. Install it with:
 
 ```sh
-sudo apt install ./dist/sniplite_0.1.2-1_all.deb
+sudo apt install ./dist/sniplite_0.1.3-1_all.deb
 ```
 
 ## Tests
