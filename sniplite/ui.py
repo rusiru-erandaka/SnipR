@@ -7,7 +7,8 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
-from gi.repository import Gdk, Gio, GLib, Gtk
+gi.require_version("Graphene", "1.0")
+from gi.repository import Gdk, Gio, GLib, Graphene, Gtk
 from PIL import Image
 
 from . import __version__
@@ -19,14 +20,38 @@ from .paths import copy_portal_capture
 APP_ID = "io.github.sniplite.Sniplite"
 
 
+def fit_geometry(image_size: tuple[int, int], canvas_size: tuple[int, int]):
+    image_width, image_height = image_size
+    canvas_width, canvas_height = canvas_size
+    scale = min(canvas_width / image_width, canvas_height / image_height)
+    draw_width, draw_height = image_width * scale, image_height * scale
+    offset = ((canvas_width - draw_width) / 2, (canvas_height - draw_height) / 2)
+    return scale, offset, (draw_width, draw_height)
+
+
 def image_texture(image: Image.Image) -> Gdk.Texture:
     output = io.BytesIO()
     image.save(output, format="PNG")
     return Gdk.Texture.new_from_bytes(GLib.Bytes.new(output.getvalue()))
 
 
+class ImageCanvas(Gtk.Widget):
+    """One snapshot surface for both the fitted image and pointer overlay."""
+
+    def __init__(self, editor: "EditorWindow") -> None:
+        super().__init__(hexpand=True, vexpand=True)
+        self.editor = editor
+
+    def do_measure(self, _orientation, _for_size):
+        return 0, 0, -1, -1
+
+    def do_snapshot(self, snapshot: Gtk.Snapshot) -> None:
+        self.editor._snapshot_canvas(snapshot, self.get_width(), self.get_height())
+
+
 class EditorWindow(Gtk.ApplicationWindow):
     COLORS = ["#000000", "#ffffff", "#ef2929", "#ff7800", "#f6d32d", "#33d17a", "#1c71d8", "#813d9c"]
+    CURSORS = {"pen": "pencil", "highlighter": "cell", "eraser": "not-allowed", "crop": "crosshair"}
 
     def __init__(self, app: Gtk.Application, raw_path: Path) -> None:
         super().__init__(application=app, title=f"SnipLite {__version__} — {raw_path.name}")
@@ -42,6 +67,7 @@ class EditorWindow(Gtk.ApplicationWindow):
         self.scale = 1.0
         self.offset = (0.0, 0.0)
         self._closing_after_choice = False
+        self.texture = image_texture(self.model.image)
         self._build_ui()
         self.connect("close-request", self._on_close_request)
 
@@ -77,24 +103,15 @@ class EditorWindow(Gtk.ApplicationWindow):
             toolbar.append(button)
 
         root.append(toolbar)
-        viewport = Gtk.Overlay(hexpand=True, vexpand=True)
-        self.picture = Gtk.Picture.new_for_filename(str(self.raw_path))
-        self.picture.set_hexpand(True)
-        self.picture.set_vexpand(True)
-        self.picture.set_can_shrink(True)
-        self.picture.set_content_fit(Gtk.ContentFit.CONTAIN)
-        viewport.set_child(self.picture)
-
-        self.canvas = Gtk.DrawingArea(hexpand=True, vexpand=True)
-        self.canvas.set_draw_func(self._draw)
+        self.canvas = ImageCanvas(self)
         drag = Gtk.GestureDrag()
         drag.set_button(Gdk.BUTTON_PRIMARY)
         drag.connect("drag-begin", self._drag_begin)
         drag.connect("drag-update", self._drag_update)
         drag.connect("drag-end", self._drag_end)
         self.canvas.add_controller(drag)
-        viewport.add_overlay(self.canvas)
-        root.append(viewport)
+        self._update_cursor()
+        root.append(self.canvas)
 
         status = Gtk.Label(label=f"Raw capture saved automatically to {self.raw_path}", xalign=0)
         status.set_margin_start(10)
@@ -114,6 +131,11 @@ class EditorWindow(Gtk.ApplicationWindow):
                 if isinstance(child, Gtk.ToggleButton) and child is not button:
                     child.set_active(False)
                 child = child.get_next_sibling()
+            self._update_cursor()
+
+    def _update_cursor(self) -> None:
+        if hasattr(self, "canvas"):
+            self.canvas.set_cursor_from_name(self.CURSORS.get(self.tool, "default"))
 
     def _color_changed(self, button: Gtk.ColorButton) -> None:
         rgba = button.get_rgba()
@@ -147,17 +169,24 @@ class EditorWindow(Gtk.ApplicationWindow):
         elif self.points:
             width = self.width * (3 if self.tool == "highlighter" else 1)
             self.model.stroke(self.points, self.color, width, self.tool)
-        self._refresh_picture()
+        self._refresh_canvas()
         self.points = []
         self.crop_start = self.crop_end = None
         self.canvas.queue_draw()
 
-    def _draw(self, _area: Gtk.DrawingArea, cr, width: int, height: int) -> None:
+    def _snapshot_canvas(self, snapshot: Gtk.Snapshot, width: int, height: int) -> None:
         image = self.model.image
-        self.scale = min(width / image.width, height / image.height)
-        draw_width, draw_height = image.width * self.scale, image.height * self.scale
-        self.offset = ((width - draw_width) / 2, (height - draw_height) / 2)
-        cr.save()
+        if width <= 0 or height <= 0:
+            return
+        self.scale, self.offset, draw_size = fit_geometry(image.size, (width, height))
+        draw_width, draw_height = draw_size
+        image_rect = Graphene.Rect()
+        image_rect.init(self.offset[0], self.offset[1], draw_width, draw_height)
+        snapshot.append_texture(self.texture, image_rect)
+
+        canvas_rect = Graphene.Rect()
+        canvas_rect.init(0, 0, width, height)
+        cr = snapshot.append_cairo(canvas_rect)
         cr.translate(*self.offset)
         cr.scale(self.scale, self.scale)
         if self.points and self.tool != "crop":
@@ -174,19 +203,19 @@ class EditorWindow(Gtk.ApplicationWindow):
             cr.set_line_width(2 / self.scale)
             cr.rectangle(min(x1, x2), min(y1, y2), abs(x2 - x1), abs(y2 - y1))
             cr.stroke()
-        cr.restore()
 
-    def _refresh_picture(self) -> None:
-        self.picture.set_paintable(image_texture(self.model.image))
+    def _refresh_canvas(self) -> None:
+        self.texture = image_texture(self.model.image)
+        self.canvas.queue_draw()
 
     def _undo(self, _button=None) -> None:
         self.model.undo()
-        self._refresh_picture()
+        self._refresh_canvas()
         self.canvas.queue_draw()
 
     def _redo(self, _button=None) -> None:
         self.model.redo()
-        self._refresh_picture()
+        self._refresh_canvas()
         self.canvas.queue_draw()
 
     def _copy(self, _button=None) -> None:
