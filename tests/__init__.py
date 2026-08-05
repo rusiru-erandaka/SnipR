@@ -1,1 +1,1 @@
-"""SnipLite test suite."""
+"""SnipR test suite."""
