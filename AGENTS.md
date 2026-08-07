@@ -7,7 +7,7 @@ SnipR is a lightweight Ubuntu Wayland screenshot editor. It captures through
 `Pictures/Screenshots` directory, and opens a GTK 4 editor. Edited output is never
 silently written over the raw capture.
 
-Current application/package version: `0.2.1-1`.
+Current application/package version: `0.3.0-1`.
 
 ## Technology and runtime requirements
 
@@ -33,7 +33,7 @@ available from Ubuntu packages over new third-party libraries.
 - `data/`: launcher, icon, executable wrapper, and direct `.deb` control metadata
 - `debian/`: conventional Debian source-package metadata
 - `build-deb.sh`: dependency-free local binary-package builder
-- `SNIPR.md`: user installation and usage guide
+- `README.md`: user installation and usage guide
 
 ## Capture and editing flow
 
@@ -48,6 +48,8 @@ available from Ubuntu packages over new third-party libraries.
 5. Completed edits update the Pillow model and replace the canvas texture.
 6. Save As writes a separate PNG. Closing a dirty editor must offer Save,
    Discard, and Cancel. Closing a clean editor exits normally.
+7. Crop is a staged edit: drawing creates a persistent selection, adjustment does
+   not modify `EditorModel`, and only Apply Crop commits the model change.
 
 ## Important behavior and constraints
 
@@ -62,6 +64,12 @@ available from Ubuntu packages over new third-party libraries.
   regresses to the rejected non-interactive portal path.
 - Keep pen, highlighter, eraser, and crop pointer mapping exact at every aspect
   ratio and window size.
+- A crop selection must visibly dim everything outside it, show four corner and
+  four edge handles, support inside dragging to move, and remain editable until
+  Apply Crop or Cancel Crop. Never commit a crop in the drag-end handler.
+- Apply Crop and Cancel Crop controls are contextual and must remain hidden when
+  there is no valid crop selection. Cancel and tool switching must not dirty or
+  modify the image.
 - Eraser restores pixels from the model's current uncensored background layer;
   it must not paint a solid color over annotations.
 - Maintain tool-specific cursors and keep the canvas cursor synchronized with
@@ -89,15 +97,15 @@ Build and inspect the package:
 
 ```sh
 ./build-deb.sh
-dpkg-deb --info dist/snipr_0.2.1-1_all.deb
-dpkg-deb --contents dist/snipr_0.2.1-1_all.deb
+dpkg-deb --info dist/snipr_0.3.0-1_all.deb
+dpkg-deb --contents dist/snipr_0.3.0-1_all.deb
 desktop-file-validate data/io.github.snipr.SnipR.desktop
 ```
 
 Install the local build:
 
 ```sh
-sudo apt install ./dist/snipr_0.2.1-1_all.deb
+sudo apt install ./dist/snipr_0.3.0-1_all.deb
 ```
 
 ## Release checklist
@@ -109,7 +117,7 @@ When changing the version, update all of these together:
 3. `data/deb-control`
 4. output filename in `build-deb.sh`
 5. newest entry in `debian/changelog`
-6. package filenames in `SNIPR.md` and this guide
+6. package filenames in `README.md` and this guide
 
 Then run the full tests, rebuild the `.deb`, validate the desktop file, extract
 the package into a temporary directory, and verify that `import snipr` succeeds

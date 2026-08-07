@@ -22,5 +22,5 @@ install -m 0644 "$project_dir"/snipr/*.py "$package_root/usr/lib/python3/dist-pa
 install -m 0644 "$project_dir/data/io.github.snipr.SnipR.desktop" "$package_root/usr/share/applications/"
 install -m 0644 "$project_dir/data/io.github.snipr.SnipR.svg" "$package_root/usr/share/icons/hicolor/scalable/apps/"
 
-dpkg-deb --build --root-owner-group "$package_root" "$project_dir/dist/snipr_0.2.1-1_all.deb"
-echo "Built $project_dir/dist/snipr_0.2.1-1_all.deb"
+dpkg-deb --build --root-owner-group "$package_root" "$project_dir/dist/snipr_0.3.0-1_all.deb"
+echo "Built $project_dir/dist/snipr_0.3.0-1_all.deb"
