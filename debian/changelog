@@ -1,3 +1,11 @@
+snipr (0.3.0-1) unstable; urgency=medium
+
+  * Add a persistent, adjustable crop selection with eight resize handles.
+  * Add explicit Apply Crop and Cancel Crop actions.
+  * Dim the area outside the crop selection for improved visibility.
+
+ -- SnipR Contributors <noreply@example.com>  Fri, 07 Aug 2026 10:15:00 +0530
+
 snipr (0.2.1-1) unstable; urgency=medium
 
   * Route full-screen capture through Ubuntu's interactive Wayland picker.
