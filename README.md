@@ -11,7 +11,7 @@ draw, highlight, erase, crop, undo, redo, copy, and manually save the edited ima
 3. Install the included package:
 
 ```sh
-sudo apt install ./dist/snipr_0.2.1-1_all.deb
+sudo apt install ./dist/snipr_0.3.0-1_all.deb
 ```
 
 Ubuntu installs any required GTK, Pillow, and desktop-portal dependencies
@@ -48,6 +48,13 @@ folder, normally:
 
 Edited images are saved only when you select **Save As**. Closing with unsaved
 edits shows Save, Discard, and Cancel choices.
+
+## Cropping
+
+Select **Crop**, then drag over the part of the screenshot you want to keep. The
+outside area is dimmed and the selection remains active. Drag a corner or edge
+handle to resize it, or drag inside the selection to move it. Choose **Apply Crop**
+to finalize the crop or **Cancel Crop** to leave the image unchanged.
 
 ## Capture modes
 
