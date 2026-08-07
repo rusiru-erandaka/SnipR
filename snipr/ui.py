@@ -34,6 +34,81 @@ def fit_geometry(image_size: tuple[int, int], canvas_size: tuple[int, int]):
     return scale, offset, (draw_width, draw_height)
 
 
+def normalize_crop_box(
+    first: tuple[float, float], second: tuple[float, float]
+) -> tuple[float, float, float, float]:
+    return (
+        min(first[0], second[0]),
+        min(first[1], second[1]),
+        max(first[0], second[0]),
+        max(first[1], second[1]),
+    )
+
+
+def crop_handles(box: tuple[float, float, float, float]):
+    left, top, right, bottom = box
+    center_x = (left + right) / 2
+    center_y = (top + bottom) / 2
+    return {
+        "nw": (left, top),
+        "n": (center_x, top),
+        "ne": (right, top),
+        "e": (right, center_y),
+        "se": (right, bottom),
+        "s": (center_x, bottom),
+        "sw": (left, bottom),
+        "w": (left, center_y),
+    }
+
+
+def crop_hit_target(
+    box: tuple[float, float, float, float],
+    point: tuple[float, float],
+    tolerance: float,
+) -> str | None:
+    x, y = point
+    for name, (handle_x, handle_y) in crop_handles(box).items():
+        if abs(x - handle_x) <= tolerance and abs(y - handle_y) <= tolerance:
+            return name
+    left, top, right, bottom = box
+    if left <= x <= right and top <= y <= bottom:
+        return "move"
+    return None
+
+
+def resize_crop_box(
+    box: tuple[float, float, float, float],
+    handle: str,
+    point: tuple[float, float],
+    image_size: tuple[int, int],
+    minimum_size: float = 3,
+) -> tuple[float, float, float, float]:
+    left, top, right, bottom = box
+    x = max(0.0, min(point[0], float(image_size[0])))
+    y = max(0.0, min(point[1], float(image_size[1])))
+    if "w" in handle:
+        left = min(x, right - minimum_size)
+    if "e" in handle:
+        right = max(x, left + minimum_size)
+    if "n" in handle:
+        top = min(y, bottom - minimum_size)
+    if "s" in handle:
+        bottom = max(y, top + minimum_size)
+    return left, top, right, bottom
+
+
+def move_crop_box(
+    box: tuple[float, float, float, float],
+    delta: tuple[float, float],
+    image_size: tuple[int, int],
+) -> tuple[float, float, float, float]:
+    left, top, right, bottom = box
+    width, height = right - left, bottom - top
+    new_left = max(0.0, min(left + delta[0], image_size[0] - width))
+    new_top = max(0.0, min(top + delta[1], image_size[1] - height))
+    return new_left, new_top, new_left + width, new_top + height
+
+
 def image_texture(image: Image.Image) -> Gdk.Texture:
     output = io.BytesIO()
     image.save(output, format="PNG")
@@ -67,8 +142,10 @@ class EditorWindow(Gtk.ApplicationWindow):
         self.color = (239, 41, 41, 255)
         self.width = 5
         self.points: list[tuple[float, float]] = []
-        self.crop_start: tuple[float, float] | None = None
-        self.crop_end: tuple[float, float] | None = None
+        self.crop_box: tuple[float, float, float, float] | None = None
+        self.crop_interaction: str | None = None
+        self.crop_anchor: tuple[float, float] | None = None
+        self.crop_initial_box: tuple[float, float, float, float] | None = None
         self.scale = 1.0
         self.offset = (0.0, 0.0)
         self._closing_after_choice = False
@@ -108,6 +185,19 @@ class EditorWindow(Gtk.ApplicationWindow):
             toolbar.append(button)
 
         root.append(toolbar)
+        self.crop_actions = Gtk.Box(spacing=8, halign=Gtk.Align.CENTER)
+        self.crop_actions.set_margin_bottom(8)
+        self.crop_actions.append(Gtk.Label(label="Adjust the selection, then apply or cancel the crop."))
+        apply_crop = Gtk.Button(label="Apply Crop")
+        apply_crop.add_css_class("suggested-action")
+        apply_crop.connect("clicked", self._apply_crop)
+        self.crop_actions.append(apply_crop)
+        cancel_crop = Gtk.Button(label="Cancel Crop")
+        cancel_crop.connect("clicked", self._cancel_crop)
+        self.crop_actions.append(cancel_crop)
+        self.crop_actions.set_visible(False)
+        root.append(self.crop_actions)
+
         self.canvas = ImageCanvas(self)
         drag = Gtk.GestureDrag()
         drag.set_button(Gdk.BUTTON_PRIMARY)
@@ -115,6 +205,10 @@ class EditorWindow(Gtk.ApplicationWindow):
         drag.connect("drag-update", self._drag_update)
         drag.connect("drag-end", self._drag_end)
         self.canvas.add_controller(drag)
+        motion = Gtk.EventControllerMotion()
+        motion.connect("motion", self._crop_pointer_motion)
+        motion.connect("leave", lambda _controller: self._update_cursor())
+        self.canvas.add_controller(motion)
         self._update_cursor()
         root.append(self.canvas)
 
@@ -129,6 +223,8 @@ class EditorWindow(Gtk.ApplicationWindow):
 
     def _tool_toggled(self, button: Gtk.ToggleButton, tool: str) -> None:
         if button.get_active():
+            if hasattr(self, "tool") and self.tool == "crop" and tool != "crop":
+                self._cancel_crop()
             self.tool = tool
             parent = button.get_parent()
             child = parent.get_first_child()
@@ -149,35 +245,99 @@ class EditorWindow(Gtk.ApplicationWindow):
     def _image_point(self, x: float, y: float) -> tuple[float, float]:
         return ((x - self.offset[0]) / self.scale, (y - self.offset[1]) / self.scale)
 
-    def _drag_begin(self, _gesture: Gtk.GestureDrag, x: float, y: float) -> None:
+    def _bounded_image_point(self, x: float, y: float) -> tuple[float, float]:
         point = self._image_point(x, y)
+        return (
+            max(0.0, min(point[0], float(self.model.image.width))),
+            max(0.0, min(point[1], float(self.model.image.height))),
+        )
+
+    def _drag_begin(self, _gesture: Gtk.GestureDrag, x: float, y: float) -> None:
+        point = self._bounded_image_point(x, y)
+        if self.tool == "crop":
+            self.crop_anchor = point
+            self.crop_initial_box = self.crop_box
+            tolerance = 10 / max(self.scale, 0.001)
+            target = crop_hit_target(self.crop_box, point, tolerance) if self.crop_box else None
+            self.crop_interaction = target or "new"
+            if self.crop_interaction == "new":
+                self.crop_box = (*point, *point)
+                self.crop_actions.set_visible(False)
+            return
         self.points = [point]
-        self.crop_start = point if self.tool == "crop" else None
-        self.crop_end = self.crop_start
 
     def _drag_update(self, gesture: Gtk.GestureDrag, dx: float, dy: float) -> None:
         start = gesture.get_start_point()
         if not start[0]:
             return
-        point = self._image_point(start[1] + dx, start[2] + dy)
+        point = self._bounded_image_point(start[1] + dx, start[2] + dy)
         if self.tool == "crop":
-            self.crop_end = point
+            if self.crop_interaction == "new" and self.crop_anchor:
+                self.crop_box = normalize_crop_box(self.crop_anchor, point)
+            elif self.crop_interaction == "move" and self.crop_anchor and self.crop_initial_box:
+                delta = (point[0] - self.crop_anchor[0], point[1] - self.crop_anchor[1])
+                self.crop_box = move_crop_box(self.crop_initial_box, delta, self.model.image.size)
+            elif self.crop_interaction and self.crop_initial_box:
+                self.crop_box = resize_crop_box(
+                    self.crop_initial_box, self.crop_interaction, point, self.model.image.size
+                )
         else:
             self.points.append(point)
         self.canvas.queue_draw()
 
     def _drag_end(self, _gesture: Gtk.GestureDrag, _dx: float, _dy: float) -> None:
-        if self.tool == "crop" and self.crop_start and self.crop_end:
-            x1, y1 = self.crop_start
-            x2, y2 = self.crop_end
-            self.model.crop((round(min(x1, x2)), round(min(y1, y2)), round(max(x1, x2)), round(max(y1, y2))))
-        elif self.points:
+        if self.tool == "crop":
+            if self.crop_box:
+                left, top, right, bottom = self.crop_box
+                if right - left >= 3 and bottom - top >= 3:
+                    self.crop_actions.set_visible(True)
+                else:
+                    self.crop_box = None
+                    self.crop_actions.set_visible(False)
+            self.crop_interaction = None
+            self.crop_anchor = None
+            self.crop_initial_box = None
+            self.canvas.queue_draw()
+            return
+        if self.points:
             width = self.width * (3 if self.tool == "highlighter" else 1)
             self.model.stroke(self.points, self.color, width, self.tool)
         self._refresh_canvas()
         self.points = []
-        self.crop_start = self.crop_end = None
         self.canvas.queue_draw()
+
+    def _apply_crop(self, _button=None) -> None:
+        if not self.crop_box:
+            return
+        left, top, right, bottom = self.crop_box
+        self.model.crop((round(left), round(top), round(right), round(bottom)))
+        self._clear_crop_selection()
+        self._refresh_canvas()
+
+    def _cancel_crop(self, _button=None) -> None:
+        if not hasattr(self, "crop_actions"):
+            return
+        self._clear_crop_selection()
+        self.canvas.queue_draw()
+
+    def _clear_crop_selection(self) -> None:
+        self.crop_box = None
+        self.crop_interaction = None
+        self.crop_anchor = None
+        self.crop_initial_box = None
+        self.crop_actions.set_visible(False)
+        self._update_cursor()
+
+    def _crop_pointer_motion(self, _controller, x: float, y: float) -> None:
+        if self.tool != "crop" or not self.crop_box or self.crop_interaction:
+            return
+        target = crop_hit_target(self.crop_box, self._image_point(x, y), 10 / max(self.scale, 0.001))
+        cursors = {
+            "nw": "nw-resize", "se": "se-resize", "ne": "ne-resize", "sw": "sw-resize",
+            "n": "n-resize", "s": "s-resize", "e": "e-resize", "w": "w-resize",
+            "move": "move",
+        }
+        self.canvas.set_cursor_from_name(cursors.get(target, "crosshair"))
 
     def _snapshot_canvas(self, snapshot: Gtk.Snapshot, width: int, height: int) -> None:
         image = self.model.image
@@ -201,24 +361,44 @@ class EditorWindow(Gtk.ApplicationWindow):
             for point in self.points[1:]:
                 cr.line_to(*point)
             cr.stroke()
-        if self.crop_start and self.crop_end:
-            x1, y1 = self.crop_start
-            x2, y2 = self.crop_end
-            cr.set_source_rgba(1, 1, 1, 0.9)
-            cr.set_line_width(2 / self.scale)
-            cr.rectangle(min(x1, x2), min(y1, y2), abs(x2 - x1), abs(y2 - y1))
+        if self.crop_box:
+            left, top, right, bottom = self.crop_box
+            selection_width = max(0, right - left)
+            selection_height = max(0, bottom - top)
+            cr.set_source_rgba(0, 0, 0, 0.58)
+            cr.rectangle(0, 0, image.width, top)
+            cr.rectangle(0, bottom, image.width, image.height - bottom)
+            cr.rectangle(0, top, left, selection_height)
+            cr.rectangle(right, top, image.width - right, selection_height)
+            cr.fill()
+
+            screen_unit = 1 / max(self.scale, 0.001)
+            cr.set_source_rgba(1, 1, 1, 0.98)
+            cr.set_line_width(2 * screen_unit)
+            cr.set_dash([6 * screen_unit, 4 * screen_unit])
+            cr.rectangle(left, top, selection_width, selection_height)
             cr.stroke()
+            cr.set_dash([])
+            for handle_x, handle_y in crop_handles(self.crop_box).values():
+                cr.set_source_rgba(0, 0, 0, 0.5)
+                cr.arc(handle_x, handle_y, 7 * screen_unit, 0, 6.283185307)
+                cr.fill()
+                cr.set_source_rgba(1, 1, 1, 1)
+                cr.arc(handle_x, handle_y, 5.5 * screen_unit, 0, 6.283185307)
+                cr.fill()
 
     def _refresh_canvas(self) -> None:
         self.texture = image_texture(self.model.image)
         self.canvas.queue_draw()
 
     def _undo(self, _button=None) -> None:
+        self._cancel_crop()
         self.model.undo()
         self._refresh_canvas()
         self.canvas.queue_draw()
 
     def _redo(self, _button=None) -> None:
+        self._cancel_crop()
         self.model.redo()
         self._refresh_canvas()
         self.canvas.queue_draw()
